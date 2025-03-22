@@ -38,8 +38,8 @@ module.exports.run = async function ({ api, event, args }) {
     // *হ্যালো* → হ্যালো (স্টার ফরম্যাটিং সরানো)
     reply = reply.replace(/\*(.*?)\*/g, '$1');
 
-    // * **হ্যালো** → • হ্যালো (স্পেসের পর স্টার থাকলে, সেখানে "•" বসানো)
-    reply = reply.replace(/\*\s\*\*(.*?)\*\*/g, '• $1');
+    // * **হ্যালো** → • হ্যালো (স্পেস এবং স্টার থেকে • বসানো)
+    reply = reply.replace(/\*\s*\*\*\s*(.*?)\s*\*\*/g, '• $1');
 
     return api.sendMessage(reply, event.threadID, event.messageID);
   } catch (error) {
