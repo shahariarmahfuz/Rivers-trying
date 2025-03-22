@@ -17,9 +17,10 @@ module.exports.config = {
 module.exports.run = async function ({ api, event, args }) {
   const axios = require('axios');
   const ask = args.join(' ');
+
   if (!ask) {
     return api.sendMessage(
-      '✨ 𝗔𝗻𝗼𝘁𝗵𝗲𝗿-𝗠𝗲\n━━━━━━━━━━━\n\nPlease provide a question.',
+      'আপনার প্রশ্নটি লিখুন।',
       event.threadID,
       event.messageID
     );
@@ -29,15 +30,21 @@ module.exports.run = async function ({ api, event, args }) {
     const res = await axios.get(
       `https://new-ai-buxr.onrender.com/ai?q=${encodeURIComponent(ask)}&id=${event.senderID}`
     );
-    const reply = res.data.response.trim();
-    return api.sendMessage(
-      `✨ 𝗔𝗻𝗼𝘁𝗵𝗲𝗿-𝗠𝗲\n━━━━━━━━━━━\n\n${reply}\n\nby Metoushela Walker and Ulric Atayi`,
-      event.threadID,
-      event.messageID
-    );
+    let reply = res.data.response.trim();
+
+    // **হ্যালো** → হ্যালো (বোল্ড ফরম্যাটিং সরানো)
+    reply = reply.replace(/\*\*(.*?)\*\*/g, '$1');
+
+    // *হ্যালো* → হ্যালো (স্টার ফরম্যাটিং সরানো)
+    reply = reply.replace(/\*(.*?)\*/g, '$1');
+
+    // * **হ্যালো** → • হ্যালো (স্পেসের পর স্টার থাকলে, সেখানে "•" বসানো)
+    reply = reply.replace(/\*\s\*\*(.*?)\*\*/g, '• $1');
+
+    return api.sendMessage(reply, event.threadID, event.messageID);
   } catch (error) {
     return api.sendMessage(
-      'An unexpected error occurred while fetching the API.',
+      'একটি ত্রুটি ঘটেছে। দয়া করে পরে আবার চেষ্টা করুন।',
       event.threadID,
       event.messageID
     );
