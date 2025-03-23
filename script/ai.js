@@ -19,11 +19,7 @@ module.exports.run = async function ({ api, event, args }) {
   const ask = args.join(' ');
 
   if (!ask) {
-    return api.sendMessage(
-      'আপনার প্রশ্নটি লিখুন।',
-      event.threadID,
-      event.messageID
-    );
+    return api.sendMessage('আপনার প্রশ্নটি লিখুন।', event.threadID, event.messageID);
   }
 
   try {
@@ -32,21 +28,17 @@ module.exports.run = async function ({ api, event, args }) {
     );
     let reply = res.data.response.trim();
 
-    // **হ্যালো** → হ্যালো (বোল্ড ফরম্যাটিং সরানো)
-    reply = reply.replace(/\*\*(.*?)\*\*/g, '$1');
-
-    // *হ্যালো* → হ্যালো (স্টার ফরম্যাটিং সরানো)
-    reply = reply.replace(/\*(.*?)\*/g, '$1');
-
-    // * **হ্যালো** → • হ্যালো (স্পেস এবং স্টার থেকে • বসানো)
+    // ১ম ধাপ: * **টেক্সট** → • টেক্সট (বুলেট পয়েন্টে কনভার্ট)
     reply = reply.replace(/\*\s*\*\*\s*(.*?)\s*\*\*/g, '• $1');
+    
+    // ২য় ধাপ: **বোল্ড** → বোল্ড (ডাবল স্টার সরানো)
+    reply = reply.replace(/\*\*(.*?)\*\*/g, '$1');
+    
+    // ৩য় ধাপ: *ইটালিক* → ইটালিক (সিঙ্গেল স্টার সরানো)
+    reply = reply.replace(/\*(.*?)\*/g, '$1');
 
     return api.sendMessage(reply, event.threadID, event.messageID);
   } catch (error) {
-    return api.sendMessage(
-      'একটি ত্রুটি ঘটেছে। দয়া করে পরে আবার চেষ্টা করুন।',
-      event.threadID,
-      event.messageID
-    );
+    return api.sendMessage('একটি ত্রুটি ঘটেছে। দয়া করে পরে আবার চেষ্টা করুন।', event.threadID, event.messageID);
   }
 };
