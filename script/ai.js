@@ -28,14 +28,17 @@ module.exports.run = async function ({ api, event, args }) {
     );
     let reply = res.data.response.trim();
 
-    // ১ম ধাপ: * **টেক্সট** → • টেক্সট (বুলেট পয়েন্টে কনভার্ট)
-    reply = reply.replace(/\*\s*\*\*\s*(.*?)\s*\*\*/g, '• $1');
-    
-    // ২য় ধাপ: **বোল্ড** → বোল্ড (ডাবল স্টার সরানো)
+    // ১ম ধাপ: যেকোনো * **টেক্সট** → • টেক্সট (সব স্টার এবং স্পেস হ্যান্ডেল)
+    reply = reply.replace(/\*[\s*]*\*{2,}[\s*]*(.*?)[\s*]*\*{2,}[\s*]*/g, '• $1');
+
+    // ২য় ধাপ: **বোল্ড** → বোল্ড (বাকি ** সরানো)
     reply = reply.replace(/\*\*(.*?)\*\*/g, '$1');
-    
-    // ৩য় ধাপ: *ইটালিক* → ইটালিক (সিঙ্গেল স্টার সরানো)
+
+    // ৩য় ধাপ: *ইটালিক* → ইটালিক (বাকি * সরানো)
     reply = reply.replace(/\*(.*?)\*/g, '$1');
+
+    // ৪র্থ ধাপ: একা থাকা স্টার (যেমন: *টেক্সট বা টেক্সট*) সরানো
+    reply = reply.replace(/(?<!\w)\*+(?!\w)/g, '');
 
     return api.sendMessage(reply, event.threadID, event.messageID);
   } catch (error) {
