@@ -24,7 +24,7 @@ module.exports.run = async function ({ api, event, args }) {
 
   try {
     const res = await axios.get(
-      `https://new-ai-buxr.onrender.com/ai?q=${encodeURIComponent(ask)}&id=${event.senderID}`
+      `https://facebook-api-1uv3.onrender.com/ai?q=${encodeURIComponent(ask)}&id=${event.senderID}`
     );
     let reply = res.data.response.trim();
 
