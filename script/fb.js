@@ -8,7 +8,7 @@ module.exports.config = {
   premium: false,
   category: 'utility',
   usage: '[Facebook video link]',
-  cooldowns: 5,
+  cooldowns: 15,
   dependency: {
     axios: '',
     fs: '',
@@ -22,83 +22,77 @@ module.exports.run = async function ({ api, event, args }) {
   const path = require('path');
   
   const fbLink = args[0];
-  const MAX_FILE_SIZE_MB = 30;
-
+  const MAX_FILE_SIZE_MB = 30; // Maximum allowed file size in MB
+  
   if (!fbLink || (!fbLink.includes('facebook.com') && !fbLink.includes('fb.watch'))) {
     return api.sendMessage('Please provide a valid Facebook video link.', event.threadID, event.messageID);
   }
-
+  
   try {
-    // Send waiting message and store its ID
-    const waitingMsg = await api.sendMessage('⏳ Downloading your video, please wait...', event.threadID);
-
+    api.sendMessage('⏳ Please wait, downloading your video...', event.threadID, event.messageID);
+    
     const apiUrl = `https://facebook-api-1uv3.onrender.com/fb?link=${encodeURIComponent(fbLink)}`;
     const response = await axios.get(apiUrl);
-
+    
     if (response.data.status !== 'success' || !response.data.links) {
-      await api.unsendMessage(waitingMsg.messageID);
       return api.sendMessage('Error downloading video. Please try another link.', event.threadID, event.messageID);
     }
-
+    
     const videoUrl = response.data.links.hd_url || response.data.links.sd_url;
     if (!videoUrl) {
-      await api.unsendMessage(waitingMsg.messageID);
       return api.sendMessage('Video link not found.', event.threadID, event.messageID);
     }
-
-    // Check file size
+    
+    // Check file size before downloading
     const headResponse = await axios.head(videoUrl);
     const contentLength = headResponse.headers['content-length'];
     const fileSizeMB = contentLength ? Math.round(contentLength / (1024 * 1024)) : 0;
-
+    
     if (fileSizeMB > MAX_FILE_SIZE_MB) {
-      await api.unsendMessage(waitingMsg.messageID);
       return api.sendMessage(`❌ Video is too large (${fileSizeMB}MB). Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`, event.threadID, event.messageID);
     }
-
-    // Create temp directory
+    
+    // Create temp directory if not exists
     const tempDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
-
+    
     const tempPath = path.join(tempDir, `fb_video_${Date.now()}.mp4`);
     const writer = fs.createWriteStream(tempPath);
-
+    
     const videoResponse = await axios({
       method: 'get',
       url: videoUrl,
       responseType: 'stream'
     });
-
+    
     videoResponse.data.pipe(writer);
-
+    
     await new Promise((resolve, reject) => {
       writer.on('finish', resolve);
       writer.on('error', reject);
     });
-
-    // Verify actual file size
+    
+    // Verify actual downloaded file size
     const stats = fs.statSync(tempPath);
     const actualFileSizeMB = Math.round(stats.size / (1024 * 1024));
-
+    
     if (actualFileSizeMB > MAX_FILE_SIZE_MB) {
       fs.unlinkSync(tempPath);
-      await api.unsendMessage(waitingMsg.messageID);
       return api.sendMessage(`❌ Downloaded video is too large (${actualFileSizeMB}MB). Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`, event.threadID, event.messageID);
     }
-
-    // Unsend waiting message and send video without any text
-    await api.unsendMessage(waitingMsg.messageID);
+    
     await api.sendMessage({
+      body: `✅ Video downloaded successfully! (${actualFileSizeMB}MB)`,
       attachment: fs.createReadStream(tempPath)
     }, event.threadID);
-
-    // Delete temp file after sending
+    
+    // Delete file after sending
     fs.unlink(tempPath, (err) => {
-      if (err) console.error('Error deleting temp file:', err);
+      if (err) console.error('Error deleting file:', err);
     });
-
+    
   } catch (error) {
     console.error('Error:', error);
     api.sendMessage('Error downloading video. Please try again later.', event.threadID, event.messageID);
