@@ -11,7 +11,8 @@ module.exports.config = {
   cooldowns: 5,
   dependency: {
     axios: '',
-    fs: ''
+    fs: '',
+    path: ''
   }
 };
 
@@ -22,7 +23,7 @@ module.exports.run = async function ({ api, event, args }) {
   
   const fbLink = args[0];
   
-  if (!fbLink || !fbLink.includes('facebook.com') && !fbLink.includes('fb.watch')) {
+  if (!fbLink || (!fbLink.includes('facebook.com') && !fbLink.includes('fb.watch'))) {
     return api.sendMessage('দয়া করে একটি বৈধ Facebook ভিডিও লিংক প্রদান করুন।', event.threadID, event.messageID);
   }
   
@@ -33,44 +34,48 @@ module.exports.run = async function ({ api, event, args }) {
     const response = await axios.get(apiUrl);
     
     if (response.data.status !== 'success' || !response.data.links) {
-      return api.sendMessage('ভিডিও ডাউনলোড করতে সমস্যা হয়েছে। দয়া করে অন্য লিংক চেষ্টা করুন।', event.threadID);
+      return api.sendMessage('ভিডিও ডাউনলোড করতে সমস্যা হয়েছে। দয়া করে অন্য লিংক চেষ্টা করুন।', event.threadID, event.messageID);
     }
     
-    // HD লিংক নেওয়া হবে যদি থাকে, নাহলে SD লিংক নেওয়া হবে
     const videoUrl = response.data.links.hd_url || response.data.links.sd_url;
-    
     if (!videoUrl) {
-      return api.sendMessage('ভিডিও লিংক পাওয়া যায়নি।', event.threadID);
+      return api.sendMessage('ভিডিও লিংক পাওয়া যায়নি।', event.threadID, event.messageID);
     }
     
-    // ভিডিও ডাউনলোড
+    // টেম্প ডিরেক্টরি তৈরি (যদি না থাকে)
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    const tempPath = path.join(tempDir, `fb_video_${Date.now()}.mp4`);
+    const writer = fs.createWriteStream(tempPath);
+    
     const videoResponse = await axios({
       method: 'get',
       url: videoUrl,
       responseType: 'stream'
     });
     
-    const tempPath = path.join(__dirname, '..', 'temp', `fb_video_${Date.now()}.mp4`);
-    const writer = fs.createWriteStream(tempPath);
-    
     videoResponse.data.pipe(writer);
     
-    writer.on('finish', () => {
-      api.sendMessage({
-        body: '✅ আপনার ভিডিওটি ডাউনলোড করা হয়েছে!',
-        attachment: fs.createReadStream(tempPath)
-      }, event.threadID, () => {
-        fs.unlinkSync(tempPath); // টেম্প ফাইল ডিলিট
-      });
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
     });
     
-    writer.on('error', (error) => {
-      console.error(error);
-      api.sendMessage('ভিডিও ডাউনলোড করতে ত্রুটি হয়েছে।', event.threadID);
+    await api.sendMessage({
+      body: '✅ আপনার ভিডিওটি ডাউনলোড করা হয়েছে!',
+      attachment: fs.createReadStream(tempPath)
+    }, event.threadID);
+    
+    // ফাইল ডিলিট (ঐচ্ছিক)
+    fs.unlink(tempPath, (err) => {
+      if (err) console.error('ফাইল ডিলিট করতে ব্যর্থ:', err);
     });
     
   } catch (error) {
-    console.error(error);
-    api.sendMessage('ভিডিও ডাউনলোড করতে ত্রুটি হয়েছে। দয়া করে পরে আবার চেষ্টা করুন।', event.threadID);
+    console.error('ত্রুটি:', error);
+    api.sendMessage('ভিডিও ডাউনলোড করতে ত্রুটি হয়েছে। দয়া করে পরে আবার চেষ্টা করুন।', event.threadID, event.messageID);
   }
 };
