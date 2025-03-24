@@ -3,11 +3,11 @@ module.exports.config = {
   version: '1.0.0',
   permission: 0,
   credits: 'Metoushela',
-  description: 'Facebook ভিডিও ডাউনলোডার',
+  description: 'Facebook Video Downloader',
   prefix: false,
   premium: false,
   category: 'utility',
-  usage: '[Facebook ভিডিও লিংক]',
+  usage: '[Facebook video link]',
   cooldowns: 5,
   dependency: {
     axios: '',
@@ -22,27 +22,37 @@ module.exports.run = async function ({ api, event, args }) {
   const path = require('path');
   
   const fbLink = args[0];
+  const MAX_FILE_SIZE_MB = 30; // Maximum allowed file size in MB
   
   if (!fbLink || (!fbLink.includes('facebook.com') && !fbLink.includes('fb.watch'))) {
-    return api.sendMessage('দয়া করে একটি বৈধ Facebook ভিডিও লিংক প্রদান করুন।', event.threadID, event.messageID);
+    return api.sendMessage('Please provide a valid Facebook video link.', event.threadID, event.messageID);
   }
   
   try {
-    api.sendMessage('⏳ অপেক্ষা করুন, আপনার ভিডিওটি ডাউনলোড করা হচ্ছে...', event.threadID, event.messageID);
+    api.sendMessage('⏳ Please wait, downloading your video...', event.threadID, event.messageID);
     
     const apiUrl = `https://facebook-api-1uv3.onrender.com/fb?link=${encodeURIComponent(fbLink)}`;
     const response = await axios.get(apiUrl);
     
     if (response.data.status !== 'success' || !response.data.links) {
-      return api.sendMessage('ভিডিও ডাউনলোড করতে সমস্যা হয়েছে। দয়া করে অন্য লিংক চেষ্টা করুন।', event.threadID, event.messageID);
+      return api.sendMessage('Error downloading video. Please try another link.', event.threadID, event.messageID);
     }
     
     const videoUrl = response.data.links.hd_url || response.data.links.sd_url;
     if (!videoUrl) {
-      return api.sendMessage('ভিডিও লিংক পাওয়া যায়নি।', event.threadID, event.messageID);
+      return api.sendMessage('Video link not found.', event.threadID, event.messageID);
     }
     
-    // টেম্প ডিরেক্টরি তৈরি (যদি না থাকে)
+    // Check file size before downloading
+    const headResponse = await axios.head(videoUrl);
+    const contentLength = headResponse.headers['content-length'];
+    const fileSizeMB = contentLength ? Math.round(contentLength / (1024 * 1024)) : 0;
+    
+    if (fileSizeMB > MAX_FILE_SIZE_MB) {
+      return api.sendMessage(`❌ Video is too large (${fileSizeMB}MB). Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`, event.threadID, event.messageID);
+    }
+    
+    // Create temp directory if not exists
     const tempDir = path.join(__dirname, 'temp');
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
@@ -64,18 +74,27 @@ module.exports.run = async function ({ api, event, args }) {
       writer.on('error', reject);
     });
     
+    // Verify actual downloaded file size
+    const stats = fs.statSync(tempPath);
+    const actualFileSizeMB = Math.round(stats.size / (1024 * 1024));
+    
+    if (actualFileSizeMB > MAX_FILE_SIZE_MB) {
+      fs.unlinkSync(tempPath);
+      return api.sendMessage(`❌ Downloaded video is too large (${actualFileSizeMB}MB). Maximum allowed size is ${MAX_FILE_SIZE_MB}MB.`, event.threadID, event.messageID);
+    }
+    
     await api.sendMessage({
-      body: '✅ আপনার ভিডিওটি ডাউনলোড করা হয়েছে!',
+      body: `✅ Video downloaded successfully! (${actualFileSizeMB}MB)`,
       attachment: fs.createReadStream(tempPath)
     }, event.threadID);
     
-    // ফাইল ডিলিট (ঐচ্ছিক)
+    // Delete file after sending
     fs.unlink(tempPath, (err) => {
-      if (err) console.error('ফাইল ডিলিট করতে ব্যর্থ:', err);
+      if (err) console.error('Error deleting file:', err);
     });
     
   } catch (error) {
-    console.error('ত্রুটি:', error);
-    api.sendMessage('ভিডিও ডাউনলোড করতে ত্রুটি হয়েছে। দয়া করে পরে আবার চেষ্টা করুন।', event.threadID, event.messageID);
+    console.error('Error:', error);
+    api.sendMessage('Error downloading video. Please try again later.', event.threadID, event.messageID);
   }
 };
